@@ -256,16 +256,16 @@ export default function Home() {
   return (
     <main className="min-h-screen px-6 py-5 lg:px-8">
       {/* Header */}
-      <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="mb-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-400">
-            <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(74,222,128,0.6)]" />
+          <div className="mb-1.5 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-400">
+            <span className="pulse-glow inline-block h-2 w-2 rounded-full bg-emerald-400" />
             LILA BLACK level design review
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="text-[28px] font-bold tracking-tight bg-gradient-to-r from-neutral-100 to-neutral-300 bg-clip-text text-transparent">
             Lila Player Journey
           </h1>
-          <p className="mt-1 text-sm text-neutral-400">
+          <p className="mt-1 max-w-lg text-sm text-neutral-400">
             Map-based exploration of player journeys, fights, loot, and storm
             deaths across LILA BLACK matches (Feb 10–14).
           </p>
@@ -281,15 +281,15 @@ export default function Home() {
       </header>
 
       {error ? (
-        <div className="mb-4 rounded border border-red-500/50 bg-red-950/40 p-4 text-sm text-red-300">
+        <div className="mb-4 rounded-lg border border-red-500/50 bg-red-950/40 p-4 text-sm text-red-300">
           Failed to load data: {error}
         </div>
       ) : null}
 
       {/* 3-column workspace */}
-      <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)_320px]">
+      <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)_300px]">
         {/* Left rail — filters */}
-        <aside className="lg:sticky lg:top-5 lg:self-start">
+        <aside className="lg:sticky lg:top-5 lg:self-start lg:max-h-[calc(100vh-40px)] lg:overflow-y-auto lg:pr-1">
           <FilterPanel
             meta={meta}
             mapId={mapId}
@@ -344,7 +344,7 @@ export default function Home() {
         </div>
 
         {/* Right rail — legend, narrative, match details */}
-        <aside className="flex flex-col gap-4 lg:sticky lg:top-5 lg:self-start">
+        <aside className="flex flex-col gap-4 lg:sticky lg:top-5 lg:self-start lg:max-h-[calc(100vh-40px)] lg:overflow-y-auto lg:pr-1">
           <Legend heatmapMode={heatmapMode} />
           <CurrentRead
             mapId={mapId}
@@ -365,15 +365,13 @@ export default function Home() {
               <div className="font-mono text-[11px] text-neutral-200">
                 {selectedMatch.match_id}
               </div>
-              <ul className="mt-2 space-y-0.5 text-neutral-400">
-                <li>Date: {selectedMatch.date.replace("February_", "Feb ")}</li>
-                <li>Humans: {selectedMatch.humans}</li>
-                <li>Bot files: {selectedMatch.bots}</li>
-                <li>Combat events: {selectedMatch.kills}</li>
-                <li>Storm deaths: {selectedMatch.storm_deaths}</li>
-                <li>
-                  Match clock: {matchTrueDuration.toFixed(3)} (compressed unit)
-                </li>
+              <ul className="mt-2 space-y-1 text-neutral-400">
+                <li className="flex justify-between"><span>Date</span><span className="text-neutral-300">{selectedMatch.date.replace("February_", "Feb ")}</span></li>
+                <li className="flex justify-between"><span>Humans</span><span className="text-neutral-300">{selectedMatch.humans}</span></li>
+                <li className="flex justify-between"><span>Bot files</span><span className="text-neutral-300">{selectedMatch.bots}</span></li>
+                <li className="flex justify-between"><span>Combat events</span><span className="text-neutral-300">{selectedMatch.kills}</span></li>
+                <li className="flex justify-between"><span>Storm deaths</span><span className="text-neutral-300">{selectedMatch.storm_deaths}</span></li>
+                <li className="flex justify-between"><span>Match clock</span><span className="font-mono text-neutral-300">{matchTrueDuration.toFixed(3)}</span></li>
               </ul>
             </div>
           ) : null}
@@ -385,7 +383,7 @@ export default function Home() {
 
 function Pill({ children }: { children: React.ReactNode }) {
   return (
-    <span className="rounded-full border border-neutral-800 bg-neutral-900 px-2.5 py-1">
+    <span className="rounded-full border border-neutral-700/50 bg-neutral-900/80 px-2.5 py-1 backdrop-blur-sm">
       {children}
     </span>
   );
@@ -401,12 +399,12 @@ function StatCard({
   sub?: string;
 }) {
   return (
-    <div className="min-w-[120px] rounded-lg border border-neutral-800 bg-neutral-900/50 px-4 py-3 text-sm">
+    <div className="min-w-[120px] flex-1 rounded-lg border border-neutral-800 bg-neutral-900/50 px-4 py-3 text-sm transition-colors hover:border-neutral-700">
       <div className="text-[10px] uppercase tracking-wider text-neutral-500">
         {label}
       </div>
-      <div className="mt-1 font-mono text-base text-neutral-100">{value}</div>
-      {sub ? <div className="text-[10px] text-neutral-500">{sub}</div> : null}
+      <div className="mt-1 font-mono text-lg font-semibold text-neutral-100">{value}</div>
+      {sub ? <div className="mt-0.5 text-[10px] text-neutral-500">{sub}</div> : null}
     </div>
   );
 }

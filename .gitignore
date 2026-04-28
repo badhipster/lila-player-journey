@@ -44,5 +44,11 @@ __pycache__/
 # Local data (sourced from sibling player_data/)
 # The pipeline writes generated JSON to public/data/, which we DO commit.
 
+# Original high-res minimap backups (optimized versions are committed)
+public/minimaps/originals/
+
+# env files
+.env*
+
 # OS
 .DS_Store

@@ -19,6 +19,8 @@ not by which is most surprising.
 
 ## Insight 1 — The storm is decorative
 
+![Insight 1 — Death zones heatmap on Ambrose Valley](./screenshots/insight_1.png)
+
 **What caught my eye.** I expected the "Death zones" heatmap to show a ring
 of purple along map edges where the storm catches stragglers. On every map,
 on every day, that ring is barely visible — death heat is dominated by
@@ -59,6 +61,8 @@ players are forced into storm risk.
 ---
 
 ## Insight 2 — This dataset is a solo-PvE experience masquerading as a multiplayer extraction shooter
+
+![Insight 2 — Solo player path on Ambrose Valley match replay](./screenshots/insight_2.png)
 
 **What caught my eye.** Picking the highest-kill matches from the dropdown
 and selecting "Replay match", I expected to see paths from multiple humans
@@ -107,6 +111,8 @@ because that's what 99.6% of players actually experience.
 ---
 
 ## Insight 3 — Grand Rift is the most action-dense map but the least played
+
+![Insight 3 — Kill zones heatmap on Lockdown showing combat density](./screenshots/insight_3.png)
 
 **What caught my eye.** Cycling through maps in the tool, Grand Rift's
 minimap shows the most labelled POIs ("Maintenance Bay", "Burnt Zone",

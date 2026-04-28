@@ -17,3 +17,97 @@ body {
     text-wrap: balance;
   }
 }
+
+/* Custom scrollbar for the whole page on desktop */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #525252;
+}
+
+/* Range input (timeline) custom styling */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: #262626;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #34d399;
+  border: 2px solid #0a0a0a;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(52, 211, 153, 0.4);
+  transition: box-shadow 0.15s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.7);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #34d399;
+  border: 2px solid #0a0a0a;
+  cursor: pointer;
+}
+
+input[type="range"]:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+input[type="range"]:disabled::-webkit-slider-thumb {
+  background: #525252;
+  box-shadow: none;
+}
+
+/* Select dropdown styling */
+select {
+  color-scheme: dark;
+}
+
+/* Smooth scrolling for the map zoom container */
+.overflow-auto {
+  scroll-behavior: smooth;
+}
+
+/* Prevent body scroll when over canvas on desktop */
+@media (min-width: 1024px) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Pulse animation for the live indicator */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 6px rgba(74, 222, 128, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(74, 222, 128, 0.8);
+  }
+}
+
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}

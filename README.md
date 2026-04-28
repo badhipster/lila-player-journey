@@ -17,7 +17,8 @@ players over Feb 10–14) and renders them onto the correct minimap with:
 - Per-player path polylines with `user_id` labels at each "head"
 - Toggleable heatmaps (Traffic / Kill zones / Death zones)
 - Map / date / match cascading filters
-- Match-replay timeline scrubber with play/pause and event tick marks
+- Match-replay timeline scrubber with play/pause, speed controls (0.5×–4×), and event tick marks
+- Zoom and pan on the map canvas (Ctrl+scroll or +/− buttons)
 - Hover tooltips on every marker (event, player, world coords, timestamp)
 - Auto-generated "Current Read" narrative card describing what's on screen
 
