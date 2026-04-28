@@ -5,22 +5,30 @@
  *
  * State graph:
  *   meta, events            ← loaded once from /data/{metadata,events}.json
+ *   matchPaths              ← lazy fetch of /data/paths/{match_id}.json
+ *                              when a single match is selected
  *   mapId, dateFilter,
  *   matchFilter,
- *   enabledEventTypes       ← user-controlled filters
- *   selectedMatch           ← derived from matchFilter (object lookup)
+ *   enabledEventTypes,
+ *   tCutoff                 ← user-controlled filters
  *
- * The canvas receives the already-filtered marker array, so MapCanvas stays
- * dumb — it just renders whatever events come in for whatever map.
+ * The canvas receives already-filtered marker arrays + optional paths +
+ * optional tCutoff, so MapCanvas stays presentational.
  */
 
 import { useEffect, useMemo, useState } from "react";
 
 import FilterPanel, { ALL_EVENT_TYPES } from "@/components/FilterPanel";
 import MapView from "@/components/MapView";
+import Timeline from "@/components/Timeline";
 import { MAP_CONFIGS, MapId } from "@/lib/coordinates";
-import { loadEvents, loadMetadata } from "@/lib/data";
-import type { EventType, MarkerEvent, Metadata } from "@/lib/types";
+import { loadEvents, loadMatchPaths, loadMetadata } from "@/lib/data";
+import type {
+  EventType,
+  MarkerEvent,
+  MatchPaths,
+  Metadata,
+} from "@/lib/types";
 
 const DEFAULT_MAP: MapId = "AmbroseValley";
 const DEFAULT_DATE = "February_13"; // last full day per data/README
@@ -37,7 +45,15 @@ export default function Home() {
     new Set(ALL_EVENT_TYPES),
   );
 
-  // Load data once.
+  // Per-match path data, fetched lazily.
+  const [matchPaths, setMatchPaths] = useState<MatchPaths | null>(null);
+  const [pathLoading, setPathLoading] = useState(false);
+
+  // Timeline cutoff in match-relative units (defaults to match duration so the
+  // full match shows immediately when you pick one).
+  const [tCutoff, setTCutoff] = useState<number>(0);
+
+  // Load metadata + events once.
   useEffect(() => {
     let cancelled = false;
     Promise.all([loadMetadata(), loadEvents()])
@@ -52,11 +68,44 @@ export default function Home() {
     };
   }, []);
 
-  // When map or date changes, reset the match filter — old match_id no longer
-  // matches the cascade.
+  // When map or date changes, reset the match filter.
   useEffect(() => {
     setMatchFilter("all");
   }, [mapId, dateFilter]);
+
+  // Lazily fetch path JSON when a single match is selected.
+  useEffect(() => {
+    if (matchFilter === "all") {
+      setMatchPaths(null);
+      setTCutoff(0);
+      return;
+    }
+    let cancelled = false;
+    setPathLoading(true);
+    loadMatchPaths(matchFilter)
+      .then((p) => {
+        if (cancelled) return;
+        setMatchPaths(p);
+        // duration = max t across all players in this match
+        let maxT = 0;
+        for (const pl of p.players)
+          for (const pt of pl.points) if (pt.t > maxT) maxT = pt.t;
+        setTCutoff(maxT);
+      })
+      .catch((err) => !cancelled && setError(String(err)))
+      .finally(() => !cancelled && setPathLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [matchFilter]);
+
+  const matchTrueDuration = useMemo(() => {
+    if (!matchPaths) return 0;
+    let maxT = 0;
+    for (const pl of matchPaths.players)
+      for (const pt of pl.points) if (pt.t > maxT) maxT = pt.t;
+    return maxT;
+  }, [matchPaths]);
 
   const filteredEvents = useMemo<MarkerEvent[]>(() => {
     if (!events) return [];
@@ -82,19 +131,25 @@ export default function Home() {
     [meta, matchFilter],
   );
 
-  // Counts to surface in the right rail.
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
     for (const t of ALL_EVENT_TYPES) out[t] = 0;
     let humans = 0;
     let bots = 0;
-    for (const e of filteredEvents) {
+    // Apply tCutoff to the count when a match is selected.
+    const eventsForCount =
+      matchFilter !== "all"
+        ? filteredEvents.filter((e) => e.t <= tCutoff)
+        : filteredEvents;
+    for (const e of eventsForCount) {
       out[e.event] = (out[e.event] ?? 0) + 1;
       if (e.is_human) humans++;
       else bots++;
     }
-    return { byType: out, humans, bots, total: filteredEvents.length };
-  }, [filteredEvents]);
+    return { byType: out, humans, bots, total: eventsForCount.length };
+  }, [filteredEvents, matchFilter, tCutoff]);
+
+  const matchSelected = matchFilter !== "all";
 
   return (
     <main className="min-h-screen p-6">
@@ -145,10 +200,21 @@ export default function Home() {
 
         <div className="flex flex-1 flex-col gap-4">
           <div className="inline-block">
-            <MapView mapId={mapId} events={filteredEvents} />
+            <MapView
+              mapId={mapId}
+              events={filteredEvents}
+              paths={matchPaths}
+              tCutoff={matchSelected ? tCutoff : null}
+            />
           </div>
 
-          {/* Right rail / stats strip */}
+          <Timeline
+            duration={matchTrueDuration}
+            value={tCutoff}
+            onChange={setTCutoff}
+            disabled={!matchSelected || pathLoading}
+          />
+
           <div className="flex flex-wrap gap-3">
             <StatCard label="Markers shown" value={counts.total} />
             <StatCard
@@ -161,6 +227,16 @@ export default function Home() {
                 label="Selected match"
                 value={`${selectedMatch.humans}h · ${selectedMatch.bots}b · ${selectedMatch.kills}k`}
                 sub={selectedMatch.match_id.slice(0, 12) + "…"}
+              />
+            ) : null}
+            {matchPaths ? (
+              <StatCard
+                label="Players in match"
+                value={matchPaths.players.length}
+                sub={`${matchPaths.players.reduce(
+                  (n, p) => n + p.points.length,
+                  0,
+                )} path points`}
               />
             ) : null}
           </div>

@@ -1,33 +1,33 @@
 "use client";
 
 /**
- * MapCanvas — Konva stage that renders:
+ * MapCanvas — Konva stage that renders, in order:
  *   1. Minimap image layer (per-map PNG/JPG from /public/minimaps/)
- *   2. Event markers layer (kills, deaths, loot, storm)
+ *   2. Player path layer (polyline per player from MatchPaths, optional)
+ *   3. Event markers layer (kills, deaths, loot, storm)
  *
  * Coordinate transform from world (x, z) → pixel (px, py) via lib/coordinates.ts.
- * Canvas is rendered at `displaySize` px; coordinate math is parameterised on it
- * so the layout can shrink on smaller screens without breaking marker positions.
- *
  * Konva touches `window`, so this file is "use client". The main page also wraps
- * its consumer in next/dynamic({ ssr: false }) for safety.
+ * the consumer in next/dynamic({ ssr: false }).
  */
 
-import { useEffect, useState } from "react";
-import { Stage, Layer, Image as KonvaImage, Circle, Rect } from "react-konva";
+import { useEffect, useMemo, useState } from "react";
+import { Stage, Layer, Image as KonvaImage, Circle, Rect, Line } from "react-konva";
 
 import { MAP_CONFIGS, MapId, worldToPixel } from "@/lib/coordinates";
-import type { MarkerEvent } from "@/lib/types";
+import type { MarkerEvent, MatchPaths } from "@/lib/types";
 
 interface Props {
   mapId: MapId;
   events: MarkerEvent[];
+  paths?: MatchPaths | null;
+  /** When set, only path points and events with t <= tCutoff are rendered. */
+  tCutoff?: number | null;
   displaySize?: number;
 }
 
 const DEFAULT_SIZE = 800;
 
-/** Marker style by event type. */
 const MARKER_STYLE: Record<
   MarkerEvent["event"],
   { fill: string; stroke: string; radius: number; shape: "circle" | "diamond" | "x" | "square" }
@@ -39,6 +39,13 @@ const MARKER_STYLE: Record<
   Loot:           { fill: "#facc15", stroke: "#854d0e", radius: 4, shape: "square" },
   KilledByStorm:  { fill: "#a855f7", stroke: "#581c87", radius: 5, shape: "x" },
 };
+
+/** Cheap, deterministic string→hue. Bots get a desaturated/dimmer palette. */
+function userHue(uid: string): number {
+  let h = 0;
+  for (let i = 0; i < uid.length; i++) h = (h * 31 + uid.charCodeAt(i)) >>> 0;
+  return h % 360;
+}
 
 function useImage(src: string): HTMLImageElement | null {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
@@ -55,10 +62,49 @@ function useImage(src: string): HTMLImageElement | null {
 export default function MapCanvas({
   mapId,
   events,
+  paths = null,
+  tCutoff = null,
   displaySize = DEFAULT_SIZE,
 }: Props) {
   const map = MAP_CONFIGS[mapId];
   const minimap = useImage(map.minimap);
+
+  // Apply tCutoff to events.
+  const visibleEvents = useMemo(
+    () =>
+      tCutoff == null ? events : events.filter((e) => e.t <= (tCutoff as number)),
+    [events, tCutoff],
+  );
+
+  // Pre-compute path polyline points (flattened [x1,y1,x2,y2,...]) per player.
+  const pathPolylines = useMemo(() => {
+    if (!paths) return [];
+    return paths.players
+      .map((p) => {
+        const pts = tCutoff == null ? p.points : p.points.filter((pt) => pt.t <= tCutoff);
+        if (pts.length < 2) return null;
+        const flat: number[] = [];
+        for (const pt of pts) {
+          const { px, py } = worldToPixel(pt.x, pt.z, map, displaySize);
+          flat.push(px, py);
+        }
+        const hue = userHue(p.user_id);
+        const color = p.is_human
+          ? `hsl(${hue}, 90%, 65%)`
+          : `hsl(${hue}, 25%, 45%)`;
+        return {
+          key: p.user_id,
+          flat,
+          color,
+          isHuman: p.is_human,
+          // Last point — useful as a "current position" dot.
+          last: flat.length >= 2
+            ? { x: flat[flat.length - 2], y: flat[flat.length - 1] }
+            : null,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+  }, [paths, tCutoff, map, displaySize]);
 
   return (
     <Stage
@@ -79,13 +125,45 @@ export default function MapCanvas({
         )}
       </Layer>
 
+      {/* Paths */}
+      {pathPolylines.length > 0 ? (
+        <Layer listening={false}>
+          {pathPolylines.map((p) => (
+            <Line
+              key={p.key}
+              points={p.flat}
+              stroke={p.color}
+              strokeWidth={p.isHuman ? 1.5 : 1}
+              opacity={p.isHuman ? 0.85 : 0.5}
+              lineCap="round"
+              lineJoin="round"
+              dash={p.isHuman ? undefined : [3, 3]}
+            />
+          ))}
+          {/* "current head" markers — last position of each player */}
+          {pathPolylines
+            .filter((p) => p.last)
+            .map((p) => (
+              <Circle
+                key={`${p.key}-head`}
+                x={p.last!.x}
+                y={p.last!.y}
+                radius={p.isHuman ? 3.5 : 2.5}
+                fill={p.color}
+                stroke="#0a0a0a"
+                strokeWidth={1}
+              />
+            ))}
+        </Layer>
+      ) : null}
+
+      {/* Markers */}
       <Layer>
-        {events.map((ev, i) => {
+        {visibleEvents.map((ev, i) => {
           const { px, py } = worldToPixel(ev.x, ev.z, map, displaySize);
           const s = MARKER_STYLE[ev.event];
-          // Bot vs human: bots get a dashed stroke, humans a solid stroke.
           const dash = ev.is_human ? undefined : [3, 2];
-          const key = `${ev.match_id}-${ev.user_id}-${i}`;
+          const key = `${ev.match_id}-${ev.user_id}-${ev.event}-${i}`;
 
           if (s.shape === "circle") {
             return (
@@ -117,7 +195,6 @@ export default function MapCanvas({
             );
           }
           if (s.shape === "diamond") {
-            // Rotated square (diamond): use Rect with offset+rotation.
             return (
               <Rect
                 key={key}
@@ -135,7 +212,7 @@ export default function MapCanvas({
               />
             );
           }
-          // 'x' shape — circle with a darker centre to indicate storm.
+          // 'x' (storm) — circle with darker outline
           return (
             <Circle
               key={key}

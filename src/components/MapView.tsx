@@ -7,7 +7,7 @@
 
 import dynamic from "next/dynamic";
 import type { MapId } from "@/lib/coordinates";
-import type { MarkerEvent } from "@/lib/types";
+import type { MarkerEvent, MatchPaths } from "@/lib/types";
 
 const MapCanvas = dynamic(() => import("./MapCanvas"), {
   ssr: false,
@@ -21,6 +21,8 @@ const MapCanvas = dynamic(() => import("./MapCanvas"), {
 interface Props {
   mapId: MapId;
   events: MarkerEvent[];
+  paths?: MatchPaths | null;
+  tCutoff?: number | null;
   displaySize?: number;
 }
 
