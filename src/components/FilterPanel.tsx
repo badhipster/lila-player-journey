@@ -177,11 +177,7 @@ export default function FilterPanel({
           ))}
         </select>
         <p className="mt-2 text-[11px] leading-snug text-neutral-500">
-          <span className="text-neutral-300">Format:</span> id · date · 👤
-          humans · 🤖 bots · ☠ kills · ⚡ storm-deaths.
-        </p>
-        <p className="mt-1 text-[11px] leading-snug text-neutral-500">
-          Sorted by total kills. Pick a match to enable paths + timeline.
+          Sorted by total kills (desc). Pick a match to enable paths + timeline.
         </p>
       </section>
 

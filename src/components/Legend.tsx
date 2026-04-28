@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * Legend — small overlay anchored top-right of the canvas. Documents marker
- * color/shape and the bot vs human stroke convention. Also surfaces the
- * current heatmap mode label if one is active.
+ * Legend — documents marker color/shape and the bot vs human stroke
+ * convention. Lives in the right rail (no longer absolute-overlaid on the
+ * canvas, which previously occluded named POI labels on Grand Rift /
+ * Lockdown minimaps).
  */
 
 import type { HeatmapMode } from "./FilterPanel";
@@ -26,13 +27,20 @@ const ITEMS: {
   { label: "Storm death",     fill: "#a855f7", stroke: "#581c87", shape: "circle" },
 ];
 
+const HEATMAP_LABEL: Record<HeatmapMode, string> = {
+  off: "Off",
+  traffic: "Traffic (player flow)",
+  kills: "Kill zones",
+  deaths: "Death zones",
+};
+
 export default function Legend({ heatmapMode }: Props) {
   return (
-    <div className="pointer-events-none absolute right-3 top-3 w-[200px] rounded-lg border border-neutral-800 bg-neutral-950/85 p-3 text-[11px] backdrop-blur-sm">
-      <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-neutral-400">
+    <div className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-4 text-[12px]">
+      <div className="mb-2 text-[10px] font-medium uppercase tracking-wider text-neutral-400">
         Legend
       </div>
-      <ul className="space-y-1.5">
+      <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5">
         {ITEMS.map((it) => (
           <li key={it.label} className="flex items-center gap-2">
             <Swatch shape={it.shape} fill={it.fill} stroke={it.stroke} />
@@ -40,7 +48,7 @@ export default function Legend({ heatmapMode }: Props) {
           </li>
         ))}
       </ul>
-      <div className="mt-2 border-t border-neutral-800 pt-2 text-neutral-400">
+      <div className="mt-3 border-t border-neutral-800 pt-2.5 text-neutral-400">
         <div className="flex items-center gap-2">
           <span className="inline-block h-2.5 w-3 border border-neutral-200" />
           solid border = human
@@ -50,18 +58,10 @@ export default function Legend({ heatmapMode }: Props) {
           dashed border = bot
         </div>
       </div>
-      {heatmapMode !== "off" ? (
-        <div className="mt-2 border-t border-neutral-800 pt-2 text-neutral-400">
-          Heatmap:{" "}
-          <span className="text-neutral-200">
-            {heatmapMode === "traffic"
-              ? "Traffic (player flow)"
-              : heatmapMode === "kills"
-                ? "Kill zones"
-                : "Death zones"}
-          </span>
-        </div>
-      ) : null}
+      <div className="mt-3 border-t border-neutral-800 pt-2.5 text-neutral-400">
+        Heatmap:{" "}
+        <span className="text-neutral-200">{HEATMAP_LABEL[heatmapMode]}</span>
+      </div>
     </div>
   );
 }
@@ -75,8 +75,7 @@ function Swatch({
   fill: string;
   stroke: string;
 }) {
-  const common =
-    "inline-block h-3 w-3 shrink-0 border";
+  const common = "inline-block h-3 w-3 shrink-0 border";
   if (shape === "circle")
     return (
       <span

@@ -2,28 +2,26 @@
 
 /**
  * MapView — wraps MapCanvas with next/dynamic({ ssr: false }) so Konva (which
- * touches `window`) only loads on the client. Also owns:
- *   • Legend overlay (top-right, anchored on the canvas)
- *   • Hover tooltip — when MapCanvas raises an onMarkerHover event, render an
- *     HTML overlay near the marker showing event/player/timestamp.
+ * touches `window`) only loads on the client. Owns:
+ *   • Adaptive canvas sizing — measures the available container width once on
+ *     mount and re-measures on resize, snapping to a reasonable square.
+ *   • Hover tooltip — when MapCanvas raises onMarkerHover, render an HTML
+ *     overlay near the marker showing event/player/timestamp.
+ *
+ * Legend is no longer rendered here — it lives in the right rail to avoid
+ * occluding named POI labels on Grand Rift / Lockdown minimaps.
  */
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { MapId } from "@/lib/coordinates";
 import type { MarkerEvent, MatchPaths } from "@/lib/types";
 import type { HeatmapConfig } from "./MapCanvas";
-import Legend from "./Legend";
-import type { HeatmapMode } from "./FilterPanel";
 
 const MapCanvas = dynamic(() => import("./MapCanvas"), {
   ssr: false,
-  loading: () => (
-    <div className="flex h-[800px] w-[800px] items-center justify-center rounded-lg bg-neutral-900 text-sm text-neutral-500">
-      Loading canvas…
-    </div>
-  ),
+  loading: () => null,
 });
 
 interface Props {
@@ -32,11 +30,13 @@ interface Props {
   paths?: MatchPaths | null;
   tCutoff?: number | null;
   heatmap?: HeatmapConfig | null;
-  heatmapMode: HeatmapMode;
-  displaySize?: number;
+  /** Hard upper bound. Defaults to 1024 (the source minimap resolution). */
+  maxSize?: number;
+  /** Lower bound so things still feel useful on smaller screens. */
+  minSize?: number;
 }
 
-export interface HoverState {
+interface HoverState {
   event: MarkerEvent;
   x: number;
   y: number;
@@ -52,31 +52,55 @@ const EVENT_LABEL: Record<MarkerEvent["event"], string> = {
 };
 
 export default function MapView({
-  displaySize = 800,
-  heatmapMode,
+  maxSize = 1024,
+  minSize = 480,
   ...props
 }: Props) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<number | null>(null);
   const [hover, setHover] = useState<HoverState | null>(null);
+
+  // Measure container width on mount + resize. The Stage is square, capped
+  // by maxSize, floored by minSize, and quantised to whole pixels.
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const measure = () => {
+      const w = el.clientWidth;
+      if (!w) return;
+      const next = Math.max(minSize, Math.min(maxSize, Math.floor(w)));
+      setSize((prev) => (prev !== next ? next : prev));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [maxSize, minSize]);
 
   return (
     <div
-      className="relative inline-block"
-      style={{ width: displaySize, height: displaySize }}
+      ref={wrapperRef}
+      className="relative w-full"
+      style={{ aspectRatio: "1 / 1", maxHeight: maxSize }}
     >
-      <MapCanvas
-        {...props}
-        displaySize={displaySize}
-        onMarkerHover={setHover}
-      />
+      {size ? (
+        <MapCanvas
+          {...props}
+          displaySize={size}
+          onMarkerHover={setHover}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center rounded-lg bg-neutral-900 text-sm text-neutral-500">
+          Loading canvas…
+        </div>
+      )}
 
-      <Legend heatmapMode={heatmapMode} />
-
-      {hover ? (
+      {hover && size ? (
         <div
           className="pointer-events-none absolute z-10 rounded-md border border-neutral-700 bg-neutral-950/95 px-3 py-2 text-[11px] shadow-lg backdrop-blur-sm"
           style={{
-            left: clamp(hover.x + 14, 8, displaySize - 200),
-            top: clamp(hover.y + 14, 8, displaySize - 110),
+            left: clamp(hover.x + 14, 8, size - 200),
+            top: clamp(hover.y + 14, 8, size - 110),
             minWidth: 180,
           }}
         >

@@ -3,29 +3,42 @@
 /**
  * Lila Player Journey — main page.
  *
+ * Layout (desktop ≥ lg):
+ *   ┌──────────────────────────────────────────────────────────────┐
+ *   │ header (kicker + title + subtitle)            stat pills      │
+ *   ├────────────┬───────────────────────────────────┬─────────────┤
+ *   │ left rail  │ canvas (square, adaptive)         │ right rail  │
+ *   │ filters    │ timeline                          │ legend      │
+ *   │            │ counts strip                      │ current read│
+ *   │            │                                   │ match details│
+ *   └────────────┴───────────────────────────────────┴─────────────┘
+ *
+ * Below `lg` everything stacks single-column.
+ *
  * State graph:
  *   meta, events            ← loaded once from /data/{metadata,events}.json
  *   matchPaths              ← lazy fetch of /data/paths/{match_id}.json
- *                              when a single match is selected
+ *   positions               ← lazy fetch of /data/positions_sampled.json
+ *                              (only when Traffic heatmap selected)
  *   mapId, dateFilter,
  *   matchFilter,
  *   enabledEventTypes,
+ *   heatmapMode,
  *   tCutoff                 ← user-controlled filters
- *
- * The canvas receives already-filtered marker arrays + optional paths +
- * optional tCutoff, so MapCanvas stays presentational.
  */
 
 import { useEffect, useMemo, useState } from "react";
 
+import CurrentRead from "@/components/CurrentRead";
 import FilterPanel, {
   ALL_EVENT_TYPES,
   HeatmapMode,
 } from "@/components/FilterPanel";
+import Legend from "@/components/Legend";
 import type { HeatmapConfig } from "@/components/MapCanvas";
 import MapView from "@/components/MapView";
 import Timeline, { TimelineMark } from "@/components/Timeline";
-import { MAP_CONFIGS, MapId } from "@/lib/coordinates";
+import { MapId } from "@/lib/coordinates";
 import {
   loadEvents,
   loadMatchPaths,
@@ -56,16 +69,9 @@ export default function Home() {
   );
   const [heatmapMode, setHeatmapMode] = useState<HeatmapMode>("traffic");
 
-  // Per-match path data, fetched lazily.
   const [matchPaths, setMatchPaths] = useState<MatchPaths | null>(null);
   const [pathLoading, setPathLoading] = useState(false);
-
-  // Sampled positions powering the Traffic heatmap. Lazy-loaded the first
-  // time the user activates Traffic mode, then cached.
   const [positions, setPositions] = useState<SampledPosition[] | null>(null);
-
-  // Timeline cutoff in match-relative units (defaults to match duration so the
-  // full match shows immediately when you pick one).
   const [tCutoff, setTCutoff] = useState<number>(0);
 
   // Load metadata + events once.
@@ -95,7 +101,7 @@ export default function Home() {
     };
   }, [heatmapMode, positions]);
 
-  // When map or date changes, reset the match filter.
+  // Reset match selection when map/date changes.
   useEffect(() => {
     setMatchFilter("all");
   }, [mapId, dateFilter]);
@@ -113,7 +119,6 @@ export default function Home() {
       .then((p) => {
         if (cancelled) return;
         setMatchPaths(p);
-        // duration = max t across all players in this match
         let maxT = 0;
         for (const pl of p.players)
           for (const pt of pl.points) if (pt.t > maxT) maxT = pt.t;
@@ -145,7 +150,7 @@ export default function Home() {
     );
   }, [events, mapId, dateFilter, matchFilter, enabledEventTypes]);
 
-  // Heatmap point source — depends on selected mode and current filters.
+  // Heatmap config, filter-aware.
   const heatmapConfig = useMemo<HeatmapConfig | null>(() => {
     if (heatmapMode === "off") return null;
 
@@ -203,7 +208,6 @@ export default function Home() {
     return null;
   }, [heatmapMode, positions, events, mapId, dateFilter, matchFilter]);
 
-  // Timeline tick marks — events in the selected match, mapped to a kind.
   const timelineMarks = useMemo<TimelineMark[]>(() => {
     if (matchFilter === "all" || !events) return [];
     const out: TimelineMark[] = [];
@@ -234,39 +238,40 @@ export default function Home() {
   );
 
   const counts = useMemo(() => {
-    const out: Record<string, number> = {};
-    for (const t of ALL_EVENT_TYPES) out[t] = 0;
     let humans = 0;
     let bots = 0;
-    // Apply tCutoff to the count when a match is selected.
     const eventsForCount =
       matchFilter !== "all"
         ? filteredEvents.filter((e) => e.t <= tCutoff)
         : filteredEvents;
     for (const e of eventsForCount) {
-      out[e.event] = (out[e.event] ?? 0) + 1;
       if (e.is_human) humans++;
       else bots++;
     }
-    return { byType: out, humans, bots, total: eventsForCount.length };
+    return { humans, bots, total: eventsForCount.length };
   }, [filteredEvents, matchFilter, tCutoff]);
 
   const matchSelected = matchFilter !== "all";
 
   return (
-    <main className="min-h-screen p-6">
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <main className="min-h-screen px-6 py-5 lg:px-8">
+      {/* Header */}
+      <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
+          <div className="mb-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-400">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(74,222,128,0.6)]" />
+            LILA BLACK level design review
+          </div>
           <h1 className="text-2xl font-semibold tracking-tight">
             Lila Player Journey
           </h1>
-          <p className="text-sm text-neutral-400">
+          <p className="mt-1 text-sm text-neutral-400">
             Map-based exploration of player journeys, fights, loot, and storm
             deaths across LILA BLACK matches (Feb 10–14).
           </p>
         </div>
         {meta ? (
-          <div className="flex gap-3 text-xs text-neutral-500">
+          <div className="flex flex-wrap gap-2 text-xs text-neutral-400">
             <Pill>{meta.totals.files.toLocaleString()} files</Pill>
             <Pill>{meta.totals.events.toLocaleString()} events</Pill>
             <Pill>{meta.totals.paths.toLocaleString()} matches</Pill>
@@ -281,8 +286,10 @@ export default function Home() {
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-6 lg:flex-row">
-        <aside className="w-full max-w-xs shrink-0">
+      {/* 3-column workspace */}
+      <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)_320px]">
+        {/* Left rail — filters */}
+        <aside className="lg:sticky lg:top-5 lg:self-start">
           <FilterPanel
             meta={meta}
             mapId={mapId}
@@ -296,23 +303,17 @@ export default function Home() {
             onEventTypesChange={setEnabledEventTypes}
             onHeatmapModeChange={setHeatmapMode}
           />
-          <p className="mt-3 text-[11px] leading-snug text-neutral-500">
-            {MAP_CONFIGS[mapId].scale}m radius · origin (
-            {MAP_CONFIGS[mapId].originX}, {MAP_CONFIGS[mapId].originZ})
-          </p>
         </aside>
 
-        <div className="flex flex-1 flex-col gap-4">
-          <div className="inline-block">
-            <MapView
-              mapId={mapId}
-              events={filteredEvents}
-              paths={matchPaths}
-              tCutoff={matchSelected ? tCutoff : null}
-              heatmap={heatmapConfig}
-              heatmapMode={heatmapMode}
-            />
-          </div>
+        {/* Middle — canvas + timeline + counts */}
+        <div className="flex min-w-0 flex-col gap-4">
+          <MapView
+            mapId={mapId}
+            events={filteredEvents}
+            paths={matchPaths}
+            tCutoff={matchSelected ? tCutoff : null}
+            heatmap={heatmapConfig}
+          />
 
           <Timeline
             duration={matchTrueDuration}
@@ -329,13 +330,6 @@ export default function Home() {
               value={`${counts.humans.toLocaleString()} / ${counts.bots.toLocaleString()}`}
             />
             <StatCard label="Matches on map" value={matchesForMap.length} />
-            {selectedMatch ? (
-              <StatCard
-                label="Selected match"
-                value={`${selectedMatch.humans}h · ${selectedMatch.bots}b · ${selectedMatch.kills}k`}
-                sub={selectedMatch.match_id.slice(0, 12) + "…"}
-              />
-            ) : null}
             {matchPaths ? (
               <StatCard
                 label="Players in match"
@@ -348,6 +342,42 @@ export default function Home() {
             ) : null}
           </div>
         </div>
+
+        {/* Right rail — legend, narrative, match details */}
+        <aside className="flex flex-col gap-4 lg:sticky lg:top-5 lg:self-start">
+          <Legend heatmapMode={heatmapMode} />
+          <CurrentRead
+            mapId={mapId}
+            dateFilter={dateFilter}
+            matchFilter={matchFilter}
+            heatmapMode={heatmapMode}
+            selectedMatch={selectedMatch}
+            totalMarkers={counts.total}
+            humans={counts.humans}
+            bots={counts.bots}
+            matchesOnMap={matchesForMap.length}
+          />
+          {selectedMatch ? (
+            <div className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-4 text-[12px] text-neutral-300">
+              <div className="mb-2 text-[10px] font-medium uppercase tracking-wider text-neutral-400">
+                Selected match
+              </div>
+              <div className="font-mono text-[11px] text-neutral-200">
+                {selectedMatch.match_id}
+              </div>
+              <ul className="mt-2 space-y-0.5 text-neutral-400">
+                <li>Date: {selectedMatch.date.replace("February_", "Feb ")}</li>
+                <li>Humans: {selectedMatch.humans}</li>
+                <li>Bot files: {selectedMatch.bots}</li>
+                <li>Combat events: {selectedMatch.kills}</li>
+                <li>Storm deaths: {selectedMatch.storm_deaths}</li>
+                <li>
+                  Match clock: {matchTrueDuration.toFixed(3)} (compressed unit)
+                </li>
+              </ul>
+            </div>
+          ) : null}
+        </aside>
       </div>
     </main>
   );
@@ -371,7 +401,7 @@ function StatCard({
   sub?: string;
 }) {
   return (
-    <div className="rounded-lg border border-neutral-800 bg-neutral-900/50 px-4 py-3 text-sm">
+    <div className="min-w-[120px] rounded-lg border border-neutral-800 bg-neutral-900/50 px-4 py-3 text-sm">
       <div className="text-[10px] uppercase tracking-wider text-neutral-500">
         {label}
       </div>
