@@ -112,7 +112,7 @@ because that's what 99.6% of players actually experience.
 
 ## Insight 3 — Grand Rift is the most action-dense map but the least played
 
-![Insight 3 — Kill zones heatmap on Lockdown showing combat density](./screenshots/insight_3.png)
+![Insight 3 — Grand Rift (All 5 days, heatmap off) showing dense combat markers clustered around POIs like Maintenance Bay and Engineer's Quarters, despite being the least-played map](./screenshots/insight_3.png)
 
 **What caught my eye.** Cycling through maps in the tool, Grand Rift's
 minimap shows the most labelled POIs ("Maintenance Bay", "Burnt Zone",
