@@ -1,10 +1,12 @@
 "use client";
 
 /**
- * MapCanvas — Konva stage that renders, in order:
- *   1. Minimap image layer (per-map PNG/JPG from /public/minimaps/)
- *   2. Player path layer (polyline per player from MatchPaths, optional)
- *   3. Event markers layer (kills, deaths, loot, storm)
+ * MapCanvas — Konva stage that renders, in z-order:
+ *   1. Minimap image            (background)
+ *   2. Heatmap (optional)       (simpleheat-rendered offscreen canvas
+ *                                 wrapped in Konva.Image)
+ *   3. Player path layer        (polyline per player from MatchPaths)
+ *   4. Event markers layer      (kills, deaths, loot, storm)
  *
  * Coordinate transform from world (x, z) → pixel (px, py) via lib/coordinates.ts.
  * Konva touches `window`, so this file is "use client". The main page also wraps
@@ -12,10 +14,28 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { Stage, Layer, Image as KonvaImage, Circle, Rect, Line } from "react-konva";
+import {
+  Stage,
+  Layer,
+  Image as KonvaImage,
+  Circle,
+  Rect,
+  Line,
+} from "react-konva";
+import simpleheat from "simpleheat";
 
 import { MAP_CONFIGS, MapId, worldToPixel } from "@/lib/coordinates";
 import type { MarkerEvent, MatchPaths } from "@/lib/types";
+
+export interface HeatmapConfig {
+  /** World coordinates feeding the heat. */
+  points: { x: number; z: number }[];
+  /** "traffic" | "kills" | "deaths" — only affects the gradient. */
+  mode: "traffic" | "kills" | "deaths";
+  radius?: number;
+  blur?: number;
+  opacity?: number;
+}
 
 interface Props {
   mapId: MapId;
@@ -23,6 +43,7 @@ interface Props {
   paths?: MatchPaths | null;
   /** When set, only path points and events with t <= tCutoff are rendered. */
   tCutoff?: number | null;
+  heatmap?: HeatmapConfig | null;
   displaySize?: number;
 }
 
@@ -30,7 +51,12 @@ const DEFAULT_SIZE = 800;
 
 const MARKER_STYLE: Record<
   MarkerEvent["event"],
-  { fill: string; stroke: string; radius: number; shape: "circle" | "diamond" | "x" | "square" }
+  {
+    fill: string;
+    stroke: string;
+    radius: number;
+    shape: "circle" | "diamond" | "x" | "square";
+  }
 > = {
   Kill:           { fill: "#ef4444", stroke: "#7f1d1d", radius: 5, shape: "circle" },
   Killed:         { fill: "#0a0a0a", stroke: "#7f1d1d", radius: 5, shape: "circle" },
@@ -39,6 +65,31 @@ const MARKER_STYLE: Record<
   Loot:           { fill: "#facc15", stroke: "#854d0e", radius: 4, shape: "square" },
   KilledByStorm:  { fill: "#a855f7", stroke: "#581c87", radius: 5, shape: "x" },
 };
+
+const HEATMAP_GRADIENTS: Record<HeatmapConfig["mode"], Record<number, string>> =
+  {
+    traffic: {
+      0.2: "#1d4ed8", // blue
+      0.4: "#0ea5e9",
+      0.6: "#22c55e",
+      0.8: "#facc15",
+      1.0: "#ef4444",
+    },
+    kills: {
+      0.2: "#1e293b",
+      0.4: "#7f1d1d",
+      0.6: "#dc2626",
+      0.8: "#fb923c",
+      1.0: "#fde047",
+    },
+    deaths: {
+      0.2: "#0c0a09",
+      0.4: "#3f3f46",
+      0.6: "#7e22ce",
+      0.8: "#ec4899",
+      1.0: "#f97316",
+    },
+  };
 
 /** Cheap, deterministic string→hue. Bots get a desaturated/dimmer palette. */
 function userHue(uid: string): number {
@@ -59,20 +110,61 @@ function useImage(src: string): HTMLImageElement | null {
   return img;
 }
 
+/** Render a heatmap to an offscreen canvas via simpleheat. */
+function useHeatmapCanvas(
+  cfg: HeatmapConfig | null,
+  mapId: MapId,
+  displaySize: number,
+): HTMLCanvasElement | null {
+  const map = MAP_CONFIGS[mapId];
+  const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    if (!cfg || cfg.points.length === 0) {
+      setCanvas(null);
+      return;
+    }
+    const c = document.createElement("canvas");
+    c.width = displaySize;
+    c.height = displaySize;
+    const heat = simpleheat(c);
+    const data: [number, number, number][] = [];
+    for (const p of cfg.points) {
+      const { px, py } = worldToPixel(p.x, p.z, map, displaySize);
+      // skip clearly-out-of-bounds points so they don't pull the heat outside
+      if (px < -50 || py < -50 || px > displaySize + 50 || py > displaySize + 50) {
+        continue;
+      }
+      data.push([px, py, 1]);
+    }
+    heat.data(data);
+    heat.radius(cfg.radius ?? 18, cfg.blur ?? 22);
+    heat.gradient(HEATMAP_GRADIENTS[cfg.mode]);
+    heat.draw(0.05);
+    setCanvas(c);
+  }, [cfg, map, displaySize]);
+
+  return canvas;
+}
+
 export default function MapCanvas({
   mapId,
   events,
   paths = null,
   tCutoff = null,
+  heatmap = null,
   displaySize = DEFAULT_SIZE,
 }: Props) {
   const map = MAP_CONFIGS[mapId];
   const minimap = useImage(map.minimap);
+  const heatCanvas = useHeatmapCanvas(heatmap, mapId, displaySize);
 
   // Apply tCutoff to events.
   const visibleEvents = useMemo(
     () =>
-      tCutoff == null ? events : events.filter((e) => e.t <= (tCutoff as number)),
+      tCutoff == null
+        ? events
+        : events.filter((e) => e.t <= (tCutoff as number)),
     [events, tCutoff],
   );
 
@@ -81,7 +173,10 @@ export default function MapCanvas({
     if (!paths) return [];
     return paths.players
       .map((p) => {
-        const pts = tCutoff == null ? p.points : p.points.filter((pt) => pt.t <= tCutoff);
+        const pts =
+          tCutoff == null
+            ? p.points
+            : p.points.filter((pt) => pt.t <= tCutoff);
         if (pts.length < 2) return null;
         const flat: number[] = [];
         for (const pt of pts) {
@@ -97,10 +192,10 @@ export default function MapCanvas({
           flat,
           color,
           isHuman: p.is_human,
-          // Last point — useful as a "current position" dot.
-          last: flat.length >= 2
-            ? { x: flat[flat.length - 2], y: flat[flat.length - 1] }
-            : null,
+          last:
+            flat.length >= 2
+              ? { x: flat[flat.length - 2], y: flat[flat.length - 1] }
+              : null,
         };
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
@@ -118,14 +213,25 @@ export default function MapCanvas({
             image={minimap}
             width={displaySize}
             height={displaySize}
-            opacity={0.85}
+            opacity={heatCanvas ? 0.55 : 0.85}
           />
         ) : (
           <Rect width={displaySize} height={displaySize} fill="#111" />
         )}
       </Layer>
 
-      {/* Paths */}
+      {heatCanvas ? (
+        <Layer listening={false}>
+          <KonvaImage
+            image={heatCanvas}
+            width={displaySize}
+            height={displaySize}
+            opacity={heatmap?.opacity ?? 0.7}
+            globalCompositeOperation="screen"
+          />
+        </Layer>
+      ) : null}
+
       {pathPolylines.length > 0 ? (
         <Layer listening={false}>
           {pathPolylines.map((p) => (
@@ -140,7 +246,6 @@ export default function MapCanvas({
               dash={p.isHuman ? undefined : [3, 3]}
             />
           ))}
-          {/* "current head" markers — last position of each player */}
           {pathPolylines
             .filter((p) => p.last)
             .map((p) => (
@@ -157,7 +262,6 @@ export default function MapCanvas({
         </Layer>
       ) : null}
 
-      {/* Markers */}
       <Layer>
         {visibleEvents.map((ev, i) => {
           const { px, py } = worldToPixel(ev.x, ev.z, map, displaySize);
@@ -212,7 +316,6 @@ export default function MapCanvas({
               />
             );
           }
-          // 'x' (storm) — circle with darker outline
           return (
             <Circle
               key={key}

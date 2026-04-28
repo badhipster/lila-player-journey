@@ -206,6 +206,31 @@ def main():
 
     print(f"wrote {written} match path files to {PATHS_DIR}")
 
+    # ---- Build positions_sampled.json (heatmap traffic source) --------------
+    #
+    # All Position+BotPosition events make ~73K rows. simpleheat is fine with
+    # tens of thousands of points client-side, but the JSON payload size is
+    # what we care about. Stride-sample every Nth row per (match, player) so
+    # the spatial distribution is preserved without writing a 5 MB file.
+    HEATMAP_STRIDE = 5  # ≈ 14k points (~700-900 KB minified)
+    sampled = positions.iloc[::HEATMAP_STRIDE]
+    positions_records = []
+    for _, row in sampled.iterrows():
+        positions_records.append(
+            {
+                "x": float(row["x"]),
+                "z": float(row["z"]),
+                "m": row["map_id"],
+                "d": row["date"],
+                "mid": row["source_match_id"],
+                "h": bool(row["is_human"]),
+            }
+        )
+    positions_path = OUTPUT_DIR / "positions_sampled.json"
+    with open(positions_path, "w") as f:
+        json.dump(positions_records, f, separators=(",", ":"))
+    print(f"wrote {positions_path} ({len(positions_records):,} sampled positions, stride={HEATMAP_STRIDE})")
+
     # ---- Build metadata.json ------------------------------------------------
 
     matches_summary = []

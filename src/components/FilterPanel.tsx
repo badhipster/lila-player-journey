@@ -16,6 +16,8 @@ import { useMemo } from "react";
 import { MapId } from "@/lib/coordinates";
 import type { EventType, MatchSummary, Metadata } from "@/lib/types";
 
+export type HeatmapMode = "off" | "traffic" | "kills" | "deaths";
+
 export const ALL_EVENT_TYPES: EventType[] = [
   "Kill",
   "Killed",
@@ -63,10 +65,12 @@ interface Props {
   dateFilter: string; // "all" | "February_10" | …
   matchFilter: string; // "all" | match_id
   enabledEventTypes: Set<EventType>;
+  heatmapMode: HeatmapMode;
   onMapChange: (id: MapId) => void;
   onDateChange: (date: string) => void;
   onMatchChange: (matchId: string) => void;
   onEventTypesChange: (next: Set<EventType>) => void;
+  onHeatmapModeChange: (mode: HeatmapMode) => void;
 }
 
 export default function FilterPanel({
@@ -75,10 +79,12 @@ export default function FilterPanel({
   dateFilter,
   matchFilter,
   enabledEventTypes,
+  heatmapMode,
   onMapChange,
   onDateChange,
   onMatchChange,
   onEventTypesChange,
+  onHeatmapModeChange,
 }: Props) {
   // Cascade: matches available for current map (+ optional date filter),
   // sorted by total kills desc so the "interesting" matches sit on top.
@@ -168,6 +174,40 @@ export default function FilterPanel({
         </select>
         <p className="mt-2 text-[11px] leading-snug text-neutral-500">
           Sorted by total kills. Pick a match to enable paths + timeline.
+        </p>
+      </section>
+
+      {/* Heatmap */}
+      <section className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-4">
+        <Label>Heatmap</Label>
+        <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+          {(
+            [
+              { id: "off", label: "Off" },
+              { id: "traffic", label: "Traffic" },
+              { id: "kills", label: "Kill zones" },
+              { id: "deaths", label: "Death zones" },
+            ] as { id: HeatmapMode; label: string }[]
+          ).map((m) => {
+            const active = heatmapMode === m.id;
+            return (
+              <button
+                key={m.id}
+                onClick={() => onHeatmapModeChange(m.id)}
+                className={`rounded-md border px-2 py-1.5 text-xs transition-colors ${
+                  active
+                    ? "border-neutral-500 bg-neutral-800 text-neutral-100"
+                    : "border-neutral-800 bg-transparent text-neutral-500 hover:border-neutral-700"
+                }`}
+              >
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-[11px] leading-snug text-neutral-500">
+          Traffic uses sampled position data. Kills / Deaths use the discrete
+          marker events you have shown.
         </p>
       </section>
 

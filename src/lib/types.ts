@@ -32,6 +32,20 @@ export interface PathPoint {
   t: number;
 }
 
+/** A sampled Position/BotPosition row used as the source for the Traffic heatmap. */
+export interface SampledPosition {
+  x: number;
+  z: number;
+  /** map_id */
+  m: MapId;
+  /** date (e.g. "February_10") */
+  d: string;
+  /** match_id */
+  mid: string;
+  /** is_human */
+  h: boolean;
+}
+
 export interface PlayerPath {
   user_id: string;
   is_human: boolean;

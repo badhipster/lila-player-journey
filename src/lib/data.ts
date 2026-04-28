@@ -3,12 +3,18 @@
  * All data is precomputed by scripts/preprocess.py and lives under public/data/.
  */
 
-import type { MarkerEvent, MatchPaths, Metadata } from "./types";
+import type {
+  MarkerEvent,
+  MatchPaths,
+  Metadata,
+  SampledPosition,
+} from "./types";
 
 const BASE = "/data";
 
 let metadataCache: Metadata | null = null;
 let eventsCache: MarkerEvent[] | null = null;
+let positionsCache: SampledPosition[] | null = null;
 const pathsCache = new Map<string, MatchPaths>();
 
 export async function loadMetadata(): Promise<Metadata> {
@@ -25,6 +31,14 @@ export async function loadEvents(): Promise<MarkerEvent[]> {
   if (!res.ok) throw new Error(`events.json: ${res.status}`);
   eventsCache = (await res.json()) as MarkerEvent[];
   return eventsCache;
+}
+
+export async function loadPositionsSampled(): Promise<SampledPosition[]> {
+  if (positionsCache) return positionsCache;
+  const res = await fetch(`${BASE}/positions_sampled.json`);
+  if (!res.ok) throw new Error(`positions_sampled.json: ${res.status}`);
+  positionsCache = (await res.json()) as SampledPosition[];
+  return positionsCache;
 }
 
 export async function loadMatchPaths(matchId: string): Promise<MatchPaths> {

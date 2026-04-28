@@ -8,6 +8,7 @@
 import dynamic from "next/dynamic";
 import type { MapId } from "@/lib/coordinates";
 import type { MarkerEvent, MatchPaths } from "@/lib/types";
+import type { HeatmapConfig } from "./MapCanvas";
 
 const MapCanvas = dynamic(() => import("./MapCanvas"), {
   ssr: false,
@@ -23,6 +24,7 @@ interface Props {
   events: MarkerEvent[];
   paths?: MatchPaths | null;
   tCutoff?: number | null;
+  heatmap?: HeatmapConfig | null;
   displaySize?: number;
 }
 

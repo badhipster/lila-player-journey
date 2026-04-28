@@ -18,16 +18,26 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import FilterPanel, { ALL_EVENT_TYPES } from "@/components/FilterPanel";
+import FilterPanel, {
+  ALL_EVENT_TYPES,
+  HeatmapMode,
+} from "@/components/FilterPanel";
+import type { HeatmapConfig } from "@/components/MapCanvas";
 import MapView from "@/components/MapView";
 import Timeline from "@/components/Timeline";
 import { MAP_CONFIGS, MapId } from "@/lib/coordinates";
-import { loadEvents, loadMatchPaths, loadMetadata } from "@/lib/data";
+import {
+  loadEvents,
+  loadMatchPaths,
+  loadMetadata,
+  loadPositionsSampled,
+} from "@/lib/data";
 import type {
   EventType,
   MarkerEvent,
   MatchPaths,
   Metadata,
+  SampledPosition,
 } from "@/lib/types";
 
 const DEFAULT_MAP: MapId = "AmbroseValley";
@@ -44,10 +54,15 @@ export default function Home() {
   const [enabledEventTypes, setEnabledEventTypes] = useState<Set<EventType>>(
     new Set(ALL_EVENT_TYPES),
   );
+  const [heatmapMode, setHeatmapMode] = useState<HeatmapMode>("traffic");
 
   // Per-match path data, fetched lazily.
   const [matchPaths, setMatchPaths] = useState<MatchPaths | null>(null);
   const [pathLoading, setPathLoading] = useState(false);
+
+  // Sampled positions powering the Traffic heatmap. Lazy-loaded the first
+  // time the user activates Traffic mode, then cached.
+  const [positions, setPositions] = useState<SampledPosition[] | null>(null);
 
   // Timeline cutoff in match-relative units (defaults to match duration so the
   // full match shows immediately when you pick one).
@@ -67,6 +82,18 @@ export default function Home() {
       cancelled = true;
     };
   }, []);
+
+  // Lazy-load positions when Traffic mode is first activated.
+  useEffect(() => {
+    if (heatmapMode !== "traffic" || positions !== null) return;
+    let cancelled = false;
+    loadPositionsSampled()
+      .then((p) => !cancelled && setPositions(p))
+      .catch((err) => !cancelled && setError(String(err)));
+    return () => {
+      cancelled = true;
+    };
+  }, [heatmapMode, positions]);
 
   // When map or date changes, reset the match filter.
   useEffect(() => {
@@ -117,6 +144,64 @@ export default function Home() {
         enabledEventTypes.has(e.event),
     );
   }, [events, mapId, dateFilter, matchFilter, enabledEventTypes]);
+
+  // Heatmap point source — depends on selected mode and current filters.
+  const heatmapConfig = useMemo<HeatmapConfig | null>(() => {
+    if (heatmapMode === "off") return null;
+
+    if (heatmapMode === "traffic") {
+      if (!positions) return null;
+      const pts = positions
+        .filter(
+          (p) =>
+            p.m === mapId &&
+            (dateFilter === "all" || p.d === dateFilter) &&
+            (matchFilter === "all" || p.mid === matchFilter),
+        )
+        .map((p) => ({ x: p.x, z: p.z }));
+      return pts.length === 0
+        ? null
+        : { points: pts, mode: "traffic", radius: 14, blur: 18 };
+    }
+
+    if (heatmapMode === "kills") {
+      const KILL_TYPES = new Set<EventType>(["Kill", "BotKill"]);
+      const pts = (events ?? [])
+        .filter(
+          (e) =>
+            e.map_id === mapId &&
+            (dateFilter === "all" || e.date === dateFilter) &&
+            (matchFilter === "all" || e.match_id === matchFilter) &&
+            KILL_TYPES.has(e.event),
+        )
+        .map((e) => ({ x: e.x, z: e.z }));
+      return pts.length === 0
+        ? null
+        : { points: pts, mode: "kills", radius: 22, blur: 26 };
+    }
+
+    if (heatmapMode === "deaths") {
+      const DEATH_TYPES = new Set<EventType>([
+        "Killed",
+        "BotKilled",
+        "KilledByStorm",
+      ]);
+      const pts = (events ?? [])
+        .filter(
+          (e) =>
+            e.map_id === mapId &&
+            (dateFilter === "all" || e.date === dateFilter) &&
+            (matchFilter === "all" || e.match_id === matchFilter) &&
+            DEATH_TYPES.has(e.event),
+        )
+        .map((e) => ({ x: e.x, z: e.z }));
+      return pts.length === 0
+        ? null
+        : { points: pts, mode: "deaths", radius: 22, blur: 26 };
+    }
+
+    return null;
+  }, [heatmapMode, positions, events, mapId, dateFilter, matchFilter]);
 
   const matchesForMap = useMemo(
     () => (meta?.matches ?? []).filter((m) => m.map_id === mapId),
@@ -187,10 +272,12 @@ export default function Home() {
             dateFilter={dateFilter}
             matchFilter={matchFilter}
             enabledEventTypes={enabledEventTypes}
+            heatmapMode={heatmapMode}
             onMapChange={setMapId}
             onDateChange={setDateFilter}
             onMatchChange={setMatchFilter}
             onEventTypesChange={setEnabledEventTypes}
+            onHeatmapModeChange={setHeatmapMode}
           />
           <p className="mt-3 text-[11px] leading-snug text-neutral-500">
             {MAP_CONFIGS[mapId].scale}m radius · origin (
@@ -205,6 +292,7 @@ export default function Home() {
               events={filteredEvents}
               paths={matchPaths}
               tCutoff={matchSelected ? tCutoff : null}
+              heatmap={heatmapConfig}
             />
           </div>
 
