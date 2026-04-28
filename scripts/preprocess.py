@@ -9,8 +9,10 @@ Reads all parquet files from player_data/, normalizes them, and writes:
 Run from project root:
     python scripts/preprocess.py
 
-Adjust DATA_DIR and OUTPUT_DIR if your folder structure differs.
+Paths are resolved relative to this script, so it works from any CWD.
 """
+
+from __future__ import annotations  # PEP 563 — supports `X | None` on Python 3.9
 
 import json
 import os
