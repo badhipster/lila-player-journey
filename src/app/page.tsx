@@ -3,26 +3,41 @@
 /**
  * Lila Player Journey — main page.
  *
- * Hour 3-5 minimum: map selector + canvas rendering all marker events for the
- * selected map. Filters / paths / heatmap / timeline are layered on in later
- * hours per _strategy/02_BUILD_PLAN.md.
+ * State graph:
+ *   meta, events            ← loaded once from /data/{metadata,events}.json
+ *   mapId, dateFilter,
+ *   matchFilter,
+ *   enabledEventTypes       ← user-controlled filters
+ *   selectedMatch           ← derived from matchFilter (object lookup)
+ *
+ * The canvas receives the already-filtered marker array, so MapCanvas stays
+ * dumb — it just renders whatever events come in for whatever map.
  */
 
 import { useEffect, useMemo, useState } from "react";
 
+import FilterPanel, { ALL_EVENT_TYPES } from "@/components/FilterPanel";
 import MapView from "@/components/MapView";
 import { MAP_CONFIGS, MapId } from "@/lib/coordinates";
 import { loadEvents, loadMetadata } from "@/lib/data";
-import type { MarkerEvent, Metadata } from "@/lib/types";
+import type { EventType, MarkerEvent, Metadata } from "@/lib/types";
 
-const MAP_IDS: MapId[] = ["AmbroseValley", "GrandRift", "Lockdown"];
+const DEFAULT_MAP: MapId = "AmbroseValley";
+const DEFAULT_DATE = "February_13"; // last full day per data/README
 
 export default function Home() {
   const [meta, setMeta] = useState<Metadata | null>(null);
   const [events, setEvents] = useState<MarkerEvent[] | null>(null);
-  const [mapId, setMapId] = useState<MapId>("AmbroseValley");
   const [error, setError] = useState<string | null>(null);
 
+  const [mapId, setMapId] = useState<MapId>(DEFAULT_MAP);
+  const [dateFilter, setDateFilter] = useState<string>(DEFAULT_DATE);
+  const [matchFilter, setMatchFilter] = useState<string>("all");
+  const [enabledEventTypes, setEnabledEventTypes] = useState<Set<EventType>>(
+    new Set(ALL_EVENT_TYPES),
+  );
+
+  // Load data once.
   useEffect(() => {
     let cancelled = false;
     Promise.all([loadMetadata(), loadEvents()])
@@ -37,93 +52,148 @@ export default function Home() {
     };
   }, []);
 
-  const eventsForMap = useMemo(
-    () => (events ?? []).filter((e) => e.map_id === mapId),
-    [events, mapId],
-  );
+  // When map or date changes, reset the match filter — old match_id no longer
+  // matches the cascade.
+  useEffect(() => {
+    setMatchFilter("all");
+  }, [mapId, dateFilter]);
+
+  const filteredEvents = useMemo<MarkerEvent[]>(() => {
+    if (!events) return [];
+    return events.filter(
+      (e) =>
+        e.map_id === mapId &&
+        (dateFilter === "all" || e.date === dateFilter) &&
+        (matchFilter === "all" || e.match_id === matchFilter) &&
+        enabledEventTypes.has(e.event),
+    );
+  }, [events, mapId, dateFilter, matchFilter, enabledEventTypes]);
 
   const matchesForMap = useMemo(
     () => (meta?.matches ?? []).filter((m) => m.map_id === mapId),
     [meta, mapId],
   );
 
+  const selectedMatch = useMemo(
+    () =>
+      matchFilter === "all"
+        ? null
+        : (meta?.matches.find((m) => m.match_id === matchFilter) ?? null),
+    [meta, matchFilter],
+  );
+
+  // Counts to surface in the right rail.
+  const counts = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const t of ALL_EVENT_TYPES) out[t] = 0;
+    let humans = 0;
+    let bots = 0;
+    for (const e of filteredEvents) {
+      out[e.event] = (out[e.event] ?? 0) + 1;
+      if (e.is_human) humans++;
+      else bots++;
+    }
+    return { byType: out, humans, bots, total: filteredEvents.length };
+  }, [filteredEvents]);
+
   return (
     <main className="min-h-screen p-6">
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Lila Player Journey
-        </h1>
-        <p className="text-sm text-neutral-400">
-          Map-based exploration of player journeys, fights, loot, and storm
-          deaths across LILA BLACK matches (Feb 10–14).
-        </p>
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Lila Player Journey
+          </h1>
+          <p className="text-sm text-neutral-400">
+            Map-based exploration of player journeys, fights, loot, and storm
+            deaths across LILA BLACK matches (Feb 10–14).
+          </p>
+        </div>
+        {meta ? (
+          <div className="flex gap-3 text-xs text-neutral-500">
+            <Pill>{meta.totals.files.toLocaleString()} files</Pill>
+            <Pill>{meta.totals.events.toLocaleString()} events</Pill>
+            <Pill>{meta.totals.paths.toLocaleString()} matches</Pill>
+            <Pill>{meta.totals.unique_players} players</Pill>
+          </div>
+        ) : null}
       </header>
 
       {error ? (
-        <div className="rounded border border-red-500/50 bg-red-950/40 p-4 text-sm text-red-300">
+        <div className="mb-4 rounded border border-red-500/50 bg-red-950/40 p-4 text-sm text-red-300">
           Failed to load data: {error}
         </div>
       ) : null}
 
       <div className="flex flex-col gap-6 lg:flex-row">
-        {/* Sidebar */}
-        <aside className="w-full max-w-xs space-y-4">
-          <section className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-4">
-            <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-neutral-400">
-              Map
-            </label>
-            <select
-              value={mapId}
-              onChange={(e) => setMapId(e.target.value as MapId)}
-              className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm focus:border-neutral-500 focus:outline-none"
-            >
-              {MAP_IDS.map((id) => (
-                <option key={id} value={id}>
-                  {id}
-                </option>
-              ))}
-            </select>
-            <p className="mt-2 text-xs text-neutral-500">
-              {MAP_CONFIGS[mapId].scale}m radius · origin (
-              {MAP_CONFIGS[mapId].originX}, {MAP_CONFIGS[mapId].originZ})
-            </p>
-          </section>
-
-          <section className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-4 text-sm">
-            <h2 className="mb-2 text-xs font-medium uppercase tracking-wider text-neutral-400">
-              Dataset
-            </h2>
-            {meta ? (
-              <ul className="space-y-1 text-neutral-300">
-                <li>{meta.totals.files.toLocaleString()} parquet files</li>
-                <li>{meta.totals.events.toLocaleString()} total events</li>
-                <li>{meta.totals.markers.toLocaleString()} discrete markers</li>
-                <li>{meta.totals.paths.toLocaleString()} matches</li>
-                <li>{meta.totals.unique_players} unique players</li>
-              </ul>
-            ) : (
-              <p className="text-neutral-500">Loading…</p>
-            )}
-          </section>
-
-          <section className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-4 text-sm">
-            <h2 className="mb-2 text-xs font-medium uppercase tracking-wider text-neutral-400">
-              Selected map
-            </h2>
-            <ul className="space-y-1 text-neutral-300">
-              <li>{matchesForMap.length} matches</li>
-              <li>{eventsForMap.length} markers</li>
-            </ul>
-          </section>
+        <aside className="w-full max-w-xs shrink-0">
+          <FilterPanel
+            meta={meta}
+            mapId={mapId}
+            dateFilter={dateFilter}
+            matchFilter={matchFilter}
+            enabledEventTypes={enabledEventTypes}
+            onMapChange={setMapId}
+            onDateChange={setDateFilter}
+            onMatchChange={setMatchFilter}
+            onEventTypesChange={setEnabledEventTypes}
+          />
+          <p className="mt-3 text-[11px] leading-snug text-neutral-500">
+            {MAP_CONFIGS[mapId].scale}m radius · origin (
+            {MAP_CONFIGS[mapId].originX}, {MAP_CONFIGS[mapId].originZ})
+          </p>
         </aside>
 
-        {/* Canvas */}
-        <div className="flex-1">
+        <div className="flex flex-1 flex-col gap-4">
           <div className="inline-block">
-            <MapView mapId={mapId} events={eventsForMap} />
+            <MapView mapId={mapId} events={filteredEvents} />
+          </div>
+
+          {/* Right rail / stats strip */}
+          <div className="flex flex-wrap gap-3">
+            <StatCard label="Markers shown" value={counts.total} />
+            <StatCard
+              label="Humans / Bots"
+              value={`${counts.humans.toLocaleString()} / ${counts.bots.toLocaleString()}`}
+            />
+            <StatCard label="Matches on map" value={matchesForMap.length} />
+            {selectedMatch ? (
+              <StatCard
+                label="Selected match"
+                value={`${selectedMatch.humans}h · ${selectedMatch.bots}b · ${selectedMatch.kills}k`}
+                sub={selectedMatch.match_id.slice(0, 12) + "…"}
+              />
+            ) : null}
           </div>
         </div>
       </div>
     </main>
+  );
+}
+
+function Pill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-full border border-neutral-800 bg-neutral-900 px-2.5 py-1">
+      {children}
+    </span>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: number | string;
+  sub?: string;
+}) {
+  return (
+    <div className="rounded-lg border border-neutral-800 bg-neutral-900/50 px-4 py-3 text-sm">
+      <div className="text-[10px] uppercase tracking-wider text-neutral-500">
+        {label}
+      </div>
+      <div className="mt-1 font-mono text-base text-neutral-100">{value}</div>
+      {sub ? <div className="text-[10px] text-neutral-500">{sub}</div> : null}
+    </div>
   );
 }
