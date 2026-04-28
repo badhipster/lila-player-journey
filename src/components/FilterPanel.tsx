@@ -28,9 +28,9 @@ export const ALL_EVENT_TYPES: EventType[] = [
 ];
 
 const EVENT_LABELS: Record<EventType, string> = {
-  Kill: "Kill (PvP)",
-  Killed: "Killed (PvP)",
-  BotKill: "Bot kill",
+  Kill: "Killed a human",
+  Killed: "Killed by human",
+  BotKill: "Killed a bot",
   BotKilled: "Killed by bot",
   Loot: "Loot",
   KilledByStorm: "Storm death",

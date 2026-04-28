@@ -19,12 +19,12 @@ const ITEMS: {
   stroke: string;
   shape: "circle" | "diamond" | "square";
 }[] = [
-  { label: "Kill (PvP)",      fill: "#ef4444", stroke: "#7f1d1d", shape: "circle" },
-  { label: "Killed (PvP)",    fill: "#0a0a0a", stroke: "#7f1d1d", shape: "circle" },
-  { label: "Bot kill",        fill: "#f97316", stroke: "#7c2d12", shape: "diamond" },
-  { label: "Killed by bot",   fill: "#7f1d1d", stroke: "#1c0a0a", shape: "diamond" },
-  { label: "Loot",            fill: "#facc15", stroke: "#854d0e", shape: "square" },
-  { label: "Storm death",     fill: "#a855f7", stroke: "#581c87", shape: "circle" },
+  { label: "Killed a human",   fill: "#ef4444", stroke: "#7f1d1d", shape: "circle" },
+  { label: "Killed by human",  fill: "#0a0a0a", stroke: "#7f1d1d", shape: "circle" },
+  { label: "Killed a bot",     fill: "#f97316", stroke: "#7c2d12", shape: "diamond" },
+  { label: "Killed by bot",    fill: "#7f1d1d", stroke: "#1c0a0a", shape: "diamond" },
+  { label: "Loot",             fill: "#facc15", stroke: "#854d0e", shape: "square" },
+  { label: "Storm death",      fill: "#a855f7", stroke: "#581c87", shape: "circle" },
 ];
 
 const HEATMAP_LABEL: Record<HeatmapMode, string> = {
