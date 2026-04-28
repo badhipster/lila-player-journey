@@ -293,6 +293,7 @@ export default function Home() {
               paths={matchPaths}
               tCutoff={matchSelected ? tCutoff : null}
               heatmap={heatmapConfig}
+              heatmapMode={heatmapMode}
             />
           </div>
 

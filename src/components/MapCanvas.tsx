@@ -37,6 +37,13 @@ export interface HeatmapConfig {
   opacity?: number;
 }
 
+interface MarkerHover {
+  event: MarkerEvent;
+  /** Stage-local pixel coords (= page-local since the stage isn't scaled). */
+  x: number;
+  y: number;
+}
+
 interface Props {
   mapId: MapId;
   events: MarkerEvent[];
@@ -45,6 +52,7 @@ interface Props {
   tCutoff?: number | null;
   heatmap?: HeatmapConfig | null;
   displaySize?: number;
+  onMarkerHover?: (state: MarkerHover | null) => void;
 }
 
 const DEFAULT_SIZE = 800;
@@ -154,10 +162,18 @@ export default function MapCanvas({
   tCutoff = null,
   heatmap = null,
   displaySize = DEFAULT_SIZE,
+  onMarkerHover,
 }: Props) {
   const map = MAP_CONFIGS[mapId];
   const minimap = useImage(map.minimap);
   const heatCanvas = useHeatmapCanvas(heatmap, mapId, displaySize);
+
+  const setCursor = (target: { getStage: () => unknown } | null, c: string) => {
+    const stage = target?.getStage() as
+      | { container: () => HTMLElement }
+      | undefined;
+    if (stage) stage.container().style.cursor = c;
+  };
 
   // Apply tCutoff to events.
   const visibleEvents = useMemo(
@@ -268,6 +284,18 @@ export default function MapCanvas({
           const s = MARKER_STYLE[ev.event];
           const dash = ev.is_human ? undefined : [3, 2];
           const key = `${ev.match_id}-${ev.user_id}-${ev.event}-${i}`;
+          const hoverHandlers = onMarkerHover
+            ? {
+                onMouseEnter: (e: { target: { getStage: () => unknown } }) => {
+                  setCursor(e.target, "pointer");
+                  onMarkerHover({ event: ev, x: px, y: py });
+                },
+                onMouseLeave: (e: { target: { getStage: () => unknown } }) => {
+                  setCursor(e.target, "default");
+                  onMarkerHover(null);
+                },
+              }
+            : {};
 
           if (s.shape === "circle") {
             return (
@@ -280,6 +308,7 @@ export default function MapCanvas({
                 stroke={s.stroke}
                 strokeWidth={1.5}
                 dash={dash}
+                {...hoverHandlers}
               />
             );
           }
@@ -295,6 +324,7 @@ export default function MapCanvas({
                 stroke={s.stroke}
                 strokeWidth={1.2}
                 dash={dash}
+                {...hoverHandlers}
               />
             );
           }
@@ -313,6 +343,7 @@ export default function MapCanvas({
                 stroke={s.stroke}
                 strokeWidth={1.2}
                 dash={dash}
+                {...hoverHandlers}
               />
             );
           }
@@ -326,6 +357,7 @@ export default function MapCanvas({
               stroke="#0a0a0a"
               strokeWidth={2}
               dash={dash}
+              {...hoverHandlers}
             />
           );
         })}
