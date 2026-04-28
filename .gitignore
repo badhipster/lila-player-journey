@@ -34,3 +34,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Python venv & cache
+.venv/
+__pycache__/
+*.pyc
+.python-version
+
+# Local data (sourced from sibling player_data/)
+# The pipeline writes generated JSON to public/data/, which we DO commit.
+
+# OS
+.DS_Store
