@@ -16,18 +16,35 @@ import { useEffect, useRef, useState } from "react";
 const PLAY_SECONDS = 10; // real-world seconds for one full match playback
 const TICK_MS = 50;
 
+/** A single event surfaced as a tick on the scrubber. */
+export interface TimelineMark {
+  t: number;
+  /** Color hint: 'kill' | 'death' | 'loot' | 'storm' */
+  kind: "kill" | "death" | "loot" | "storm";
+}
+
 interface Props {
   duration: number; // max t in the selected match
   value: number; // current cutoff t
   onChange: (t: number) => void;
+  /** Tick marks rendered above the scrubber. */
+  marks?: TimelineMark[];
   /** Disable controls when no match is selected. */
   disabled?: boolean;
 }
+
+const MARK_COLOR: Record<TimelineMark["kind"], string> = {
+  kill: "#ef4444",
+  death: "#7f1d1d",
+  loot: "#facc15",
+  storm: "#a855f7",
+};
 
 export default function Timeline({
   duration,
   value,
   onChange,
+  marks = [],
   disabled = false,
 }: Props) {
   const [playing, setPlaying] = useState(false);
@@ -95,16 +112,35 @@ export default function Timeline({
         ↺ Reset
       </button>
 
-      <input
-        type="range"
-        min={0}
-        max={Math.max(duration, 0.001)}
-        step={duration > 0 ? duration / 1000 : 0.001}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        disabled={disabled || duration === 0}
-        className="flex-1 accent-neutral-300"
-      />
+      <div className="relative flex-1">
+        {/* Tick marks for events (kills / deaths / loot / storm) */}
+        {!disabled && duration > 0 && marks.length > 0 ? (
+          <div className="pointer-events-none absolute inset-x-0 -top-2.5 h-2.5">
+            {marks.map((mk, i) => (
+              <span
+                key={i}
+                className="absolute top-0 h-2 w-[2px] rounded-sm"
+                style={{
+                  left: `${(mk.t / duration) * 100}%`,
+                  backgroundColor: MARK_COLOR[mk.kind],
+                  opacity: 0.85,
+                }}
+                title={`${mk.kind} @ t=${mk.t.toFixed(3)}`}
+              />
+            ))}
+          </div>
+        ) : null}
+        <input
+          type="range"
+          min={0}
+          max={Math.max(duration, 0.001)}
+          step={duration > 0 ? duration / 1000 : 0.001}
+          value={value}
+          onChange={(e) => onChange(parseFloat(e.target.value))}
+          disabled={disabled || duration === 0}
+          className="w-full accent-neutral-300"
+        />
+      </div>
 
       <div className="w-32 shrink-0 text-right font-mono text-[11px] text-neutral-400">
         {disabled || duration === 0 ? (

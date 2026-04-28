@@ -24,7 +24,7 @@ import FilterPanel, {
 } from "@/components/FilterPanel";
 import type { HeatmapConfig } from "@/components/MapCanvas";
 import MapView from "@/components/MapView";
-import Timeline from "@/components/Timeline";
+import Timeline, { TimelineMark } from "@/components/Timeline";
 import { MAP_CONFIGS, MapId } from "@/lib/coordinates";
 import {
   loadEvents,
@@ -203,6 +203,23 @@ export default function Home() {
     return null;
   }, [heatmapMode, positions, events, mapId, dateFilter, matchFilter]);
 
+  // Timeline tick marks — events in the selected match, mapped to a kind.
+  const timelineMarks = useMemo<TimelineMark[]>(() => {
+    if (matchFilter === "all" || !events) return [];
+    const out: TimelineMark[] = [];
+    for (const e of events) {
+      if (e.match_id !== matchFilter) continue;
+      let kind: TimelineMark["kind"];
+      if (e.event === "Kill" || e.event === "BotKill") kind = "kill";
+      else if (e.event === "Killed" || e.event === "BotKilled") kind = "death";
+      else if (e.event === "KilledByStorm") kind = "storm";
+      else if (e.event === "Loot") kind = "loot";
+      else continue;
+      out.push({ t: e.t, kind });
+    }
+    return out;
+  }, [events, matchFilter]);
+
   const matchesForMap = useMemo(
     () => (meta?.matches ?? []).filter((m) => m.map_id === mapId),
     [meta, mapId],
@@ -301,6 +318,7 @@ export default function Home() {
             duration={matchTrueDuration}
             value={tCutoff}
             onChange={setTCutoff}
+            marks={timelineMarks}
             disabled={!matchSelected || pathLoading}
           />
 

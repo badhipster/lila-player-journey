@@ -165,14 +165,22 @@ export default function FilterPanel({
         >
           <option value="all">All matches (aggregate)</option>
           {cascadingMatches.map((m) => (
-            <option key={m.match_id} value={m.match_id}>
-              {m.match_id.slice(0, 8)} · {DATE_LABELS[m.date] ?? m.date} ·{" "}
-              {m.humans}h/{m.bots}b · {m.kills}k
-              {m.storm_deaths ? ` · ${m.storm_deaths}⚡` : ""}
+            <option
+              key={m.match_id}
+              value={m.match_id}
+              title={`Match ${m.match_id} — ${DATE_LABELS[m.date] ?? m.date} · ${m.humans} human(s) · ${m.bots} bot file(s) · ${m.kills} kill(s)${m.storm_deaths ? ` · ${m.storm_deaths} storm death(s)` : ""}`}
+            >
+              {m.match_id.slice(0, 8)} · {DATE_LABELS[m.date] ?? m.date} · 👤{" "}
+              {m.humans} · 🤖 {m.bots} · ☠ {m.kills}
+              {m.storm_deaths ? ` · ⚡ ${m.storm_deaths}` : ""}
             </option>
           ))}
         </select>
         <p className="mt-2 text-[11px] leading-snug text-neutral-500">
+          <span className="text-neutral-300">Format:</span> id · date · 👤
+          humans · 🤖 bots · ☠ kills · ⚡ storm-deaths.
+        </p>
+        <p className="mt-1 text-[11px] leading-snug text-neutral-500">
           Sorted by total kills. Pick a match to enable paths + timeline.
         </p>
       </section>

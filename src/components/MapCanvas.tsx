@@ -21,6 +21,7 @@ import {
   Circle,
   Rect,
   Line,
+  Text as KonvaText,
 } from "react-konva";
 import simpleheat from "simpleheat";
 
@@ -273,6 +274,25 @@ export default function MapCanvas({
                 fill={p.color}
                 stroke="#0a0a0a"
                 strokeWidth={1}
+              />
+            ))}
+          {pathPolylines
+            .filter((p) => p.last)
+            .map((p) => (
+              <KonvaText
+                key={`${p.key}-label`}
+                x={p.last!.x + 6}
+                y={p.last!.y - 4}
+                text={
+                  p.isHuman ? p.key.slice(0, 6) + "…" : "bot " + p.key.slice(0, 4)
+                }
+                fontSize={10}
+                fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+                fill={p.color}
+                shadowColor="#000"
+                shadowBlur={2}
+                shadowOpacity={0.9}
+                listening={false}
               />
             ))}
         </Layer>
